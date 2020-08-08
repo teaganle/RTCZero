@@ -71,7 +71,6 @@ void RTCZero::begin(bool resetTime)
   }
   #endif
 
- #if (SAMD21)
   // Setup clock GCLK2 with OSC32K divided by 32
   configureClock();
 
@@ -79,6 +78,7 @@ void RTCZero::begin(bool resetTime)
 
   RTCreset();
 
+ #if (SAMD21)
   tmp_reg |= RTC_MODE2_CTRL_MODE_CLOCK; // set clock operating mode
   tmp_reg |= RTC_MODE2_CTRL_PRESCALER_DIV1024; // set prescaler to 1024 for MODE2
   tmp_reg &= ~RTC_MODE2_CTRL_MATCHCLR; // disable clear on match
@@ -116,6 +116,22 @@ void RTCZero::begin(bool resetTime)
   while (RTCisSyncing())
     ;
   #elif (SAMR34)
+  	//volatile RTC_MODE2_CTRLA_Type tmp_reg;
+	  //tmp_reg.reg = 0;
+	
+		tmp_reg |= RTC_MODE2_CTRLA_MODE_CLOCK; // set clock operating mode
+		tmp_reg |= RTC_MODE2_CTRLA_PRESCALER_DIV1024; // set prescaler to 1024 for MODE2
+		tmp_reg &= ~RTC_MODE2_CTRLA_MATCHCLR; // disable clear on match
+		//According to the datasheet RTC_MODE2_CTRL_CLKREP = 0 for 24h
+		tmp_reg &= ~RTC_MODE2_CTRLA_CLKREP; // 24h time representation
+		// enable clock sync ( read register )
+		tmp_reg |= RTC_MODE2_CTRLA_CLOCKSYNC;
+	while (RTCisSyncing())
+    ;
+	RTC->MODE2.CTRLA.reg = tmp_reg;
+	while (RTCisSyncing())
+    ;
+
   RTC->MODE2.INTENSET.reg |= RTC_MODE2_INTENSET_ALARM0; // enable alarm interrupt on RTC
   
   NVIC_EnableIRQ(RTC_IRQn); // enable RTC interrupt in NVIC
@@ -127,6 +143,7 @@ void RTCZero::begin(bool resetTime)
 	;
 
   RTCenable();
+  RTCresetRemove();
 
 	while (RTCisSyncing())
 	;
@@ -141,7 +158,7 @@ void RTCZero::begin(bool resetTime)
   }
   while (RTCisSyncing())
     ;
-RTC->MODE2.INTFLAG.reg = ~RTC_MODE2_INTFLAG_RESETVALUE; // clear all flags
+  RTC->MODE2.INTFLAG.reg = ~RTC_MODE2_INTFLAG_RESETVALUE; // clear all flags
   #endif
   _configured = true;
 }
@@ -510,8 +527,9 @@ void RTCZero::configureClock() {
  * Private Utility Functions
  */
 
-#if (SAMD21)
+
 /* Configure the 32768Hz Oscillator */
+#if (SAMD21)
 void RTCZero::config32kOSC() 
 {
 #ifndef CRYSTALLESS
@@ -524,6 +542,8 @@ void RTCZero::config32kOSC()
 #endif
 }
 #endif
+
+
 /* Synchronise the CLOCK register for reading*/
 inline void RTCZero::RTCreadRequest() {
   if (_configured) {
