@@ -42,23 +42,36 @@ RTCZero::RTCZero()
 void RTCZero::begin(bool resetTime)
 {
   uint16_t tmp_reg = 0;
-  
+  #if (SAMD21)
   PM->APBAMASK.reg |= PM_APBAMASK_RTC; // turn on digital interface clock
   config32kOSC();
+  #elif(SAMR34)
+  MCLK->APBAMASK.reg |= MCLK_APBAMASK_RTC;
+  #endif
 
   // If the RTC is in clock mode and the reset was
   // not due to POR or BOD, preserve the clock time
   // POR causes a reset anyway, BOD behaviour is?
   bool validTime = false;
   RTC_MODE2_CLOCK_Type oldTime;
-
+  
+  #if (SAMD21)
   if ((!resetTime) && (PM->RCAUSE.reg & (PM_RCAUSE_SYST | PM_RCAUSE_WDT | PM_RCAUSE_EXT))) {
     if (RTC->MODE2.CTRL.reg & RTC_MODE2_CTRL_MODE_CLOCK) {
       validTime = true;
       oldTime.reg = RTC->MODE2.CLOCK.reg;
     }
   }
+  #elif (SAMR34)
+  if ((!resetTime) && (RSTC->RCAUSE.reg & (RSTC_RCAUSE_SYST | RSTC_RCAUSE_WDT | RSTC_RCAUSE_EXT))) {
+    if (RTC->MODE2.CTRLA.reg && RTC_MODE2_CTRLA_MODE_CLOCK) {
+      validTime = true;
+      oldTime.reg = RTC->MODE2.CLOCK.reg;
+    }
+  }
+  #endif
 
+ #if (SAMD21)
   // Setup clock GCLK2 with OSC32K divided by 32
   configureClock();
 
@@ -102,7 +115,34 @@ void RTCZero::begin(bool resetTime)
   }
   while (RTCisSyncing())
     ;
+  #elif (SAMR34)
+  RTC->MODE2.INTENSET.reg |= RTC_MODE2_INTENSET_ALARM0; // enable alarm interrupt on RTC
+  
+  NVIC_EnableIRQ(RTC_IRQn); // enable RTC interrupt in NVIC
+  NVIC_SetPriority(RTC_IRQn, 0x00);
+ 
 
+  RTC->MODE2.Mode2Alarm[0].MASK.bit.SEL = MATCH_OFF; // default alarm match is off (disabled)
+	while (RTCisSyncing())
+	;
+
+  RTCenable();
+
+	while (RTCisSyncing())
+	;
+  // If desired and valid, restore the time value, else use first valid time value
+  if ((!resetTime) && (validTime) && (oldTime.reg != 0L)) {
+    RTC->MODE2.CLOCK.reg = oldTime.reg;
+  }
+  else {
+    RTC->MODE2.CLOCK.reg = RTC_MODE2_CLOCK_YEAR(DEFAULT_YEAR - 2000) | RTC_MODE2_CLOCK_MONTH(DEFAULT_MONTH) 
+        | RTC_MODE2_CLOCK_DAY(DEFAULT_DAY) | RTC_MODE2_CLOCK_HOUR(DEFAULT_HOUR) 
+        | RTC_MODE2_CLOCK_MINUTE(DEFAULT_MINUTE) | RTC_MODE2_CLOCK_SECOND(DEFAULT_SECOND);
+  }
+  while (RTCisSyncing())
+    ;
+RTC->MODE2.INTFLAG.reg = ~RTC_MODE2_INTFLAG_RESETVALUE; // clear all flags
+  #endif
   _configured = true;
 }
 
@@ -446,6 +486,7 @@ void RTCZero::setY2kEpoch(uint32_t ts)
 
 /* Attach peripheral clock to 32k oscillator */
 void RTCZero::configureClock() {
+  #if (SAMD21)
   GCLK->GENDIV.reg = GCLK_GENDIV_ID(2)|GCLK_GENDIV_DIV(4);
   while (GCLK->STATUS.reg & GCLK_STATUS_SYNCBUSY)
     ;
@@ -459,12 +500,17 @@ void RTCZero::configureClock() {
   GCLK->CLKCTRL.reg = (uint32_t)((GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK2 | (RTC_GCLK_ID << GCLK_CLKCTRL_ID_Pos)));
   while (GCLK->STATUS.bit.SYNCBUSY)
     ;
+  #elif (SAMR34)
+  MCLK->APBAMASK.reg |= MCLK_APBAMASK_RTC;
+  OSC32KCTRL->RTCCTRL.reg = OSC32KCTRL_RTCCTRL_RTCSEL_ULP1K;  //OSC32KCTRL_RTCCTRL_RTCSEL_XOSC1
+  #endif
 }
 
 /*
  * Private Utility Functions
  */
 
+#if (SAMD21)
 /* Configure the 32768Hz Oscillator */
 void RTCZero::config32kOSC() 
 {
@@ -477,11 +523,13 @@ void RTCZero::config32kOSC()
                          SYSCTRL_XOSC32K_ENABLE;
 #endif
 }
-
+#endif
 /* Synchronise the CLOCK register for reading*/
 inline void RTCZero::RTCreadRequest() {
   if (_configured) {
+    #if (SAMD21)
     RTC->MODE2.READREQ.reg = RTC_READREQ_RREQ;
+    #endif
     while (RTCisSyncing())
       ;
   }
@@ -490,33 +538,57 @@ inline void RTCZero::RTCreadRequest() {
 /* Wait for sync in write operations */
 inline bool RTCZero::RTCisSyncing()
 {
+  #if (SAMD21)
   return (RTC->MODE2.STATUS.bit.SYNCBUSY);
+  #elif (SAMR34)
+  return (RTC->MODE2.SYNCBUSY.reg && RTC_MODE2_SYNCBUSY_MASK_) ; //Synchronization Busy in Clock/Calendar mode ( all bits 0 means regs are synced)
+  #endif
 }
 
 void RTCZero::RTCdisable()
 {
+  #if (SAMD21)
   RTC->MODE2.CTRL.reg &= ~RTC_MODE2_CTRL_ENABLE; // disable RTC
+  #elif (SAMR34)
+  RTC->MODE2.CTRLA.reg &= ~RTC_MODE2_CTRLA_ENABLE; // disable RTC
+  #endif
   while (RTCisSyncing())
     ;
 }
 
 void RTCZero::RTCenable()
 {
+  #if (SAMD21)
   RTC->MODE2.CTRL.reg |= RTC_MODE2_CTRL_ENABLE; // enable RTC
   while (RTCisSyncing())
     ;
+  #elif (SAMR34)
+  while (RTC->MODE2.SYNCBUSY.bit.ENABLE)
+    ;
+  RTC->MODE2.CTRLA.reg |= RTC_MODE2_CTRLA_ENABLE; // enable RTC
+  while (RTC->MODE2.SYNCBUSY.bit.ENABLE)
+    ;
+  #endif
 }
 
 void RTCZero::RTCreset()
 {
+  #if (SAMD21)
   RTC->MODE2.CTRL.reg |= RTC_MODE2_CTRL_SWRST; // software reset
+  #elif (SAMR34)
+  RTC->MODE2.CTRLA.reg |= RTC_MODE2_CTRLA_SWRST; // software reset
+  #endif
   while (RTCisSyncing())
     ;
 }
 
 void RTCZero::RTCresetRemove()
 {
+  #if (SAMD21)
   RTC->MODE2.CTRL.reg &= ~RTC_MODE2_CTRL_SWRST; // software reset remove
+  #elif (SAMR34)
+  RTC->MODE2.CTRLA.reg &= ~RTC_MODE2_CTRLA_SWRST; // software reset remove
+  #endif
   while (RTCisSyncing())
     ;
 }

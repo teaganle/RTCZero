@@ -103,8 +103,10 @@ public:
 
 private:
   bool _configured;
-
+  
+  #if (SAMD21)
   void config32kOSC(void);
+  #endif
   void configureClock(void);
   void RTCreadRequest();
   bool RTCisSyncing(void);
