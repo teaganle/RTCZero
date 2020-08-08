@@ -47,6 +47,17 @@ void RTCZero::begin(bool resetTime)
   config32kOSC();
   #elif(SAMR34)
   MCLK->APBAMASK.reg |= MCLK_APBAMASK_RTC;
+  // make sure OSC32KCTRL has the 1.024kHz output enabled
+//	config32kOSC();
+// Setup clock MLCK and OSC32KCTRL for RTC
+	configureClock();
+// disable RTC before we change any settings
+	RTCdisable();
+// reset to have a known state
+	RTCreset();
+	// disable RTC before we change any settings
+  //	RTCdisable();
+
   #endif
 
   // If the RTC is in clock mode and the reset was
@@ -116,28 +127,28 @@ void RTCZero::begin(bool resetTime)
   while (RTCisSyncing())
     ;
   #elif (SAMR34)
-  	//volatile RTC_MODE2_CTRLA_Type tmp_reg;
-	  //tmp_reg.reg = 0;
-	
+
 		tmp_reg |= RTC_MODE2_CTRLA_MODE_CLOCK; // set clock operating mode
 		tmp_reg |= RTC_MODE2_CTRLA_PRESCALER_DIV1024; // set prescaler to 1024 for MODE2
 		tmp_reg &= ~RTC_MODE2_CTRLA_MATCHCLR; // disable clear on match
-		//According to the datasheet RTC_MODE2_CTRL_CLKREP = 0 for 24h
+		
+    //According to the datasheet RTC_MODE2_CTRL_CLKREP = 0 for 24h
 		tmp_reg &= ~RTC_MODE2_CTRLA_CLKREP; // 24h time representation
-		// enable clock sync ( read register )
+		
+    // enable clock sync ( read register )
 		tmp_reg |= RTC_MODE2_CTRLA_CLOCKSYNC;
-	while (RTCisSyncing())
+	  
+    //while (RTCisSyncing())
+    //;
+	  
+    RTC->MODE2.CTRLA.reg = tmp_reg;
+	  while (RTCisSyncing())
     ;
-	RTC->MODE2.CTRLA.reg = tmp_reg;
-	while (RTCisSyncing())
-    ;
-
-  RTC->MODE2.INTENSET.reg |= RTC_MODE2_INTENSET_ALARM0; // enable alarm interrupt on RTC
   
   NVIC_EnableIRQ(RTC_IRQn); // enable RTC interrupt in NVIC
   NVIC_SetPriority(RTC_IRQn, 0x00);
  
-
+  RTC->MODE2.INTENSET.reg |= RTC_MODE2_INTENSET_ALARM0; // enable alarm interrupt on RTC
   RTC->MODE2.Mode2Alarm[0].MASK.bit.SEL = MATCH_OFF; // default alarm match is off (disabled)
 	while (RTCisSyncing())
 	;
