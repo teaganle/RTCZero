@@ -45,19 +45,14 @@ void RTCZero::begin(bool resetTime)
   #if (SAMD21)
   PM->APBAMASK.reg |= PM_APBAMASK_RTC; // turn on digital interface clock
   config32kOSC();
-  #elif(SAMR34)
+  #elif (SAMR34)
   MCLK->APBAMASK.reg |= MCLK_APBAMASK_RTC;
-  // make sure OSC32KCTRL has the 1.024kHz output enabled
-//	config32kOSC();
 // Setup clock MLCK and OSC32KCTRL for RTC
 	configureClock();
 // disable RTC before we change any settings
 	RTCdisable();
 // reset to have a known state
 	RTCreset();
-	// disable RTC before we change any settings
-  //	RTCdisable();
-
   #endif
 
   // If the RTC is in clock mode and the reset was
@@ -138,8 +133,8 @@ void RTCZero::begin(bool resetTime)
     // enable clock sync ( read register )
 		tmp_reg |= RTC_MODE2_CTRLA_CLOCKSYNC;
 	  
-    //while (RTCisSyncing())
-    //;
+    while (RTCisSyncing())
+    ;
 	  
     RTC->MODE2.CTRLA.reg = tmp_reg;
 	  while (RTCisSyncing())
@@ -581,6 +576,8 @@ void RTCZero::RTCdisable()
   #if (SAMD21)
   RTC->MODE2.CTRL.reg &= ~RTC_MODE2_CTRL_ENABLE; // disable RTC
   #elif (SAMR34)
+  while (RTCisSyncing())
+  ;
   RTC->MODE2.CTRLA.reg &= ~RTC_MODE2_CTRLA_ENABLE; // disable RTC
   #endif
   while (RTCisSyncing())
@@ -610,7 +607,7 @@ void RTCZero::RTCreset()
   RTC->MODE2.CTRLA.reg |= RTC_MODE2_CTRLA_SWRST; // software reset
   #endif
   while (RTCisSyncing())
-    ;
+  ;
 }
 
 void RTCZero::RTCresetRemove()
