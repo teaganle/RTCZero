@@ -132,7 +132,7 @@ void RTCZero::begin(bool resetTime)
 
     // enable clock sync ( read register )
     tmp_reg |= RTC_MODE2_CTRLA_CLOCKSYNC;
-
+    delay(10);
     while (RTCisSyncing())
         ;
 
