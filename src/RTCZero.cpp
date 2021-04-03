@@ -45,7 +45,7 @@ void RTCZero::begin(bool resetTime)
     #if (SAMD21)
     PM->APBAMASK.reg |= PM_APBAMASK_RTC; // turn on digital interface clock
     config32kOSC();
-    #elif (SAMR34)
+    #elif (SAMR34 || SAML21)
     MCLK->APBAMASK.reg |= MCLK_APBAMASK_RTC;
     // Setup clock MLCK and OSC32KCTRL for RTC
     configureClock();
@@ -68,7 +68,7 @@ void RTCZero::begin(bool resetTime)
             oldTime.reg = RTC->MODE2.CLOCK.reg;
         }
     }
-    #elif (SAMR34)
+    #elif (SAMR34 || SAML21)
     if ((!resetTime) && (RSTC->RCAUSE.reg & (RSTC_RCAUSE_SYST | RSTC_RCAUSE_WDT | RSTC_RCAUSE_EXT))) {
         if (RTC->MODE2.CTRLA.reg && RTC_MODE2_CTRLA_MODE_CLOCK) {
             validTime = true;
@@ -121,7 +121,7 @@ void RTCZero::begin(bool resetTime)
     }
     while (RTCisSyncing())
         ;
-    #elif (SAMR34)
+    #elif (SAMR34 || SAML21)
 
     tmp_reg |= RTC_MODE2_CTRLA_MODE_CLOCK; // set clock operating mode
     tmp_reg |= RTC_MODE2_CTRLA_PRESCALER_DIV1024; // set prescaler to 1024 for MODE2
@@ -523,7 +523,7 @@ void RTCZero::configureClock() {
     GCLK->CLKCTRL.reg = (uint32_t)((GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK2 | (RTC_GCLK_ID << GCLK_CLKCTRL_ID_Pos)));
     while (GCLK->STATUS.bit.SYNCBUSY)
         ;
-    #elif (SAMR34)
+    #elif (SAMR34 || SAML21)
     MCLK->APBAMASK.reg |= MCLK_APBAMASK_RTC;
     OSC32KCTRL->RTCCTRL.reg = OSC32KCTRL_RTCCTRL_RTCSEL_ULP1K;  //OSC32KCTRL_RTCCTRL_RTCSEL_XOSC1
     #endif
@@ -566,7 +566,7 @@ inline bool RTCZero::RTCisSyncing()
 {
     #if (SAMD21)
     return (RTC->MODE2.STATUS.bit.SYNCBUSY);
-    #elif (SAMR34)
+    #elif (SAMR34 || SAML21)
     return (RTC->MODE2.SYNCBUSY.reg && RTC_MODE2_SYNCBUSY_MASK_); //Synchronization Busy in Clock/Calendar mode ( all bits 0 means regs are synced)
     #endif
 }
@@ -575,7 +575,7 @@ void RTCZero::RTCdisable()
 {
     #if (SAMD21)
     RTC->MODE2.CTRL.reg &= ~RTC_MODE2_CTRL_ENABLE; // disable RTC
-    #elif (SAMR34)
+    #elif (SAMR34 || SAML21)
     while (RTCisSyncing())
         ;
     RTC->MODE2.CTRLA.reg &= ~RTC_MODE2_CTRLA_ENABLE; // disable RTC
@@ -590,7 +590,7 @@ void RTCZero::RTCenable()
     RTC->MODE2.CTRL.reg |= RTC_MODE2_CTRL_ENABLE; // enable RTC
     while (RTCisSyncing())
         ;
-    #elif (SAMR34)
+    #elif (SAMR34 || SAML21)
     while (RTC->MODE2.SYNCBUSY.bit.ENABLE)
         ;
     RTC->MODE2.CTRLA.reg |= RTC_MODE2_CTRLA_ENABLE; // enable RTC
@@ -603,7 +603,7 @@ void RTCZero::RTCreset()
 {
     #if (SAMD21)
     RTC->MODE2.CTRL.reg |= RTC_MODE2_CTRL_SWRST; // software reset
-    #elif (SAMR34)
+    #elif (SAMR34 || SAML21)
     RTC->MODE2.CTRLA.reg |= RTC_MODE2_CTRLA_SWRST; // software reset
     #endif
     while (RTCisSyncing())
@@ -614,7 +614,7 @@ void RTCZero::RTCresetRemove()
 {
     #if (SAMD21)
     RTC->MODE2.CTRL.reg &= ~RTC_MODE2_CTRL_SWRST; // software reset remove
-    #elif (SAMR34)
+    #elif (SAMR34 || SAML21)
     RTC->MODE2.CTRLA.reg &= ~RTC_MODE2_CTRLA_SWRST; // software reset remove
     #endif
     while (RTCisSyncing())
